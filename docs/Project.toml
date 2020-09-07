@@ -1,0 +1,3 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+IJuliaTimeMachine = "b814eec1-6f43-4d1d-9289-368939f75c8a"
