@@ -3,10 +3,12 @@ module IJuliaTimeMachine
     import IJulia
     using Markdown
 
+    #=
     function __init__()
         start_saving()
         nothing
     end
+    =#
 
     """
     `vars` is a dictionary of the variables at the time.

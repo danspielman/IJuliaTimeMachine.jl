@@ -56,7 +56,7 @@ discovered by extract_symbols.
 """
 subs_variables(ex, mapping) = ex
 subs_variables(s::Symbol, mapping::Dict) = 
-    haskey(mapping, s) ? mapping[s] : s        
+    haskey(mapping, s) ? esc(mapping[s]) : s        
 function subs_variables(ex::Expr, mapping::Dict) 
     start = ex.head == :macrocall ? 2 : 1 
     Expr(ex.head, (subs_variables(a, mapping) for a in ex.args[start:end])...)   
@@ -71,10 +71,9 @@ function rename_block(varlist, var_to_tmp)
     for s in varlist
         t = var_to_tmp[s]
         ss = """\"$(s)\""""
-        tt = """\"$(t)\""""
         q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
         push!(exs, quote if $q 
-                $(var_to_tmp[s]) = @eval Main $(s)
+                $(esc(t)) = @eval Main $(s)
                 end end)
     end 
 
@@ -118,7 +117,22 @@ function test1(varlist)
     return ex
 end   
 
+function test1(var_to_tmp::Dict)
+    exs = []
 
+    for (k, s) in var_to_tmp
+        ss = """\"$(s)\""""
+        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
+        push!(exs, quote if $q 
+                println(Symbol($ss))
+                end end)
+    end 
+
+    ex = Expr(:block)
+    ex.args = exs
+
+    return ex
+end   
 
 
 """
@@ -126,12 +140,13 @@ Attempts to add variable `name` to the dictionary.
 Fail gracefully if not allowed.
 """
 function add_tmpvar_to_dict(tmp_name, orig_name, this_state)
-    t1 = @eval typeof($(tmp_name))
+    t1 = eval(typeof(tmp_name))
 
     if !(isa(t1,Module) || isa(t1, Function))
         try
-            this_state[orig_name] = deepcopy(@eval tmp_name)
+            this_state[Symbol(orig_name)] = eval(tmp_name)
         catch
+            println(Symbol(orig_name), " -> ", tmp_name) 
         end
     end
 end 
@@ -140,23 +155,42 @@ end
 Creates a block that when executed saves the tmp vars in `past`.
 """
 function save_state_block(var_to_tmp)
-    exs = [:(this_state = Dict{Any,Any}())]
+    exs = []
+    exs = push!(exs,:(this_state = Dict{Any,Any}()))
+
 
     for (k, s) in var_to_tmp
-        println(s)
+        println(k, " ", s)
 
         ss = """\"$(s)\""""
-        q = Meta.parse("""isdefined(Symbol(IJuliaTimeMachine,$ss))""")        
-        push!(exs, quote if $q 
-                add_tmpvar_to_dict($k, $s, this_state)
-                end end)
-    end 
+        kk = """$(k)"""
+
+        ss2 = "\$($(s))"
+
+        #q = Meta.parse("""this_state[Symbol($kk)] = eval(Symbol($(ss)))""")
+        q = :(this_state[Symbol($(esc(kk)))] = $(esc(s)))
+        push!(exs, q)
+    end     
+
+
+    #push!(exs, Symbol("this_state"))    
 
     ex = Expr(:block)
     ex.args = exs
 
     return ex
 end
+
+#=
+
+this_state[Symbol($kk)] = esc($s)
+
+q = Meta.parse("""if isdefined(IJuliaTimeMachine,Symbol($ss))
+            this_state[Symbol($kk)] = deepcopy(eval(Symbol($ss)))
+        end""")   
+        =#
+
+# IJuliaTimeMachine.add_tmpvar_to_dict(Symbol($ss), Symbol($kk), this_state)
 
 
 """
@@ -169,7 +203,7 @@ function clear_block(var_to_tmp)
         ss = """\"$(s)\""""
         q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
         push!(exs, quote if $q 
-                $(s) = nothing
+                $(esc(s)) = nothing
                 end end)
     end 
 
@@ -208,6 +242,32 @@ macro sandbox(ex::Expr)
     end
 end
 
+
+
+
+macro tst(ex::Expr)
+    varlist = extract_symbols(ex)
+    var_to_tmp, tmp_to_var = variable_maps(varlist)
+    for (k,s) in var_to_tmp
+        println(k, " ", s)
+    end
+    ex_new = subs_variables(ex, var_to_tmp)
+end
+
+macro tst2(ex::Expr)
+    varlist = extract_symbols(ex)
+    var_to_tmp, tmp_to_var = variable_maps(varlist)
+    for (k,s) in var_to_tmp
+        println(k, " ", s)
+    end
+    ex_rename = rename_block(varlist, var_to_tmp)
+    ex_new = subs_variables(ex, var_to_tmp)
+    return quote
+        $(ex_rename)
+        $(ex_new)
+    end
+end
+
 """
     TM.@spawn begin
         code you want to run
@@ -223,6 +283,8 @@ macro spawn(ex::Expr)
 
     varlist = extract_symbols(ex)
 
+    println(varlist)
+
     var_to_tmp, tmp_to_var = variable_maps(varlist)
 
     ex_rename = rename_block(varlist, var_to_tmp)
@@ -230,8 +292,7 @@ macro spawn(ex::Expr)
     ex_clear = clear_block(var_to_tmp)
 
     ex_save = save_state_block(var_to_tmp)
-    # once it works, need to insert below
-    
+
     q = Meta.parse("""
         Threads.@spawn begin
             local val = $(ex_new)
@@ -242,20 +303,34 @@ macro spawn(ex::Expr)
             end
             IJulia.Out[$(n)] = valc
             $(ex_save)
-            IJuliaTimeMachine.past[$n] = IJulia_State(Dict(), valc)
+            past[$n] = IJulia_State(this_state, valc)
         end
         """)        
 
+        # need to put the clear inside the spawn
 
     return quote
-        $ex_rename
-        $q
-        $ex_clear
+        $(ex_rename)
+        begin
+            val = $(ex_new)
+            sleep(0.1)
+            IJulia.Out[$(n)] = val
+            $(ex_save)
+            past[$n] = IJulia_State(this_state, val)
+        end
     end
 
 end
 
+
+
 #=
+
+        $ex_rename
+        val = $(ex_new)
+        IJulia.Out[$(n)] = val
+        $(ex_save)
+        past[$n] = IJulia_State(this_state, val)
 
     q = Meta.parse("""
         println("xx")
