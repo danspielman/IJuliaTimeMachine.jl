@@ -1,13 +1,10 @@
 name = "IJuliaTimeMachine"
-uuid = "b814eec1-6f43-4d1d-9289-368939f75c8a"
+uuid = "c6113210-d3d9-4301-930e-a2f8bca719bb"
 authors = ["Daniel Spielman <daniel.spielman@yale.edu> and contributors"]
 version = "0.1.0"
 
+[deps]
+IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
+
 [compat]
 julia = "1"
-
-[extras]
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[targets]
-test = ["Test"]
