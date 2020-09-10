@@ -42,7 +42,12 @@ To stop saving state, type `TM.stop_saving()`.  To start up again, type `TM.star
 If you need to free up memory, type `TM.clear_past()` to clear all the saved state information.
 `TM.clear_past(cells)` clears the states in the iterator (or range) given by `cells`.
 
+`TM.running` keeps track of cells that are running.
+`TM.finished` of course keeps track of those that stopped.
+
 # Details
+
+* undefined problem solved with `global` in front of variable.
 
 * The state saving features work by using an IJulia `postexecute_hook`.
 
@@ -55,6 +60,10 @@ It stores them in `TM.past`.
 
 
 # To do
+
+# URGENT: deep copy to make safe.  and, only deepcopy vars for which we can.
+
+* Fix: output from printlns appears all over, and can not control that.
 
 * when copy variables to make safe spawn, we need to do a deepcopy in case they are modified.
 * but, then also need to be sure can do a deepcopy of it

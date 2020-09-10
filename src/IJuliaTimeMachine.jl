@@ -21,6 +21,9 @@ module IJuliaTimeMachine
 
     const past = Dict{Int,IJulia_State}()
 
+    const running = Set()
+    const finished = Vector{Int}()
+
     include("the_past.jl")
     include("spawn.jl")
 

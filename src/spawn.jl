@@ -14,6 +14,9 @@ When we are finished, we need to
 * 
 * clean up those names, 
 
+to do:
+clean up names after,
+make threaded (is that an issue)?
 
 =#
 
@@ -308,15 +311,20 @@ macro spawn(ex::Expr)
         """)        
 
         # need to put the clear inside the spawn
-
+        # it works without a Threads.@spawn in front of the begin.  With it, we have trouble.
+        # and, the problem is with things like a = a + 1.  
     return quote
+        push!(running, $n)
         $(ex_rename)
-        begin
+        Threads.@spawn begin    
             val = $(ex_new)
             sleep(0.1)
             IJulia.Out[$(n)] = val
             $(ex_save)
             past[$n] = IJulia_State(this_state, val)
+
+            push!(finished, $n)
+            $n ∈ running && delete!(running, $n)
         end
     end
 
