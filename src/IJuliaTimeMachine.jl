@@ -1,7 +1,7 @@
 module IJuliaTimeMachine
 
     import IJulia
-    using Markdown
+    #using Markdown
 
     #=
     function __init__()

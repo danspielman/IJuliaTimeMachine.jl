@@ -66,17 +66,20 @@ function subs_variables(ex::Expr, mapping::Dict)
 end
 
 """
-Creates a block that when executed renames all the variables.
+Creates a block that when executed sandboxes all copyable variables.
 """
-function rename_block(varlist, var_to_tmp)
+function sandbox_variable_block(varlist, var_to_tmp)
     exs = []
 
-    for s in varlist
-        t = var_to_tmp[s]
+    for (s, t) in var_to_tmp       
         ss = """\"$(s)\""""
         q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
         push!(exs, quote if $q 
-                $(esc(t)) = @eval Main $(s)
+                if can_copy(@eval Main $(s))
+                    $(esc(t)) = deepcopy(@eval Main $(s))
+                else
+                    $(esc(t)) = $(esc(s))
+                end
                 end end)
     end 
 
@@ -85,74 +88,6 @@ function rename_block(varlist, var_to_tmp)
 
     return ex
 end
-
-function test(varlist)
-    exs = []
-
-    for s in varlist
-        ss = """\"$(s)\""""
-        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
-        push!(exs, quote if $q 
-                println($s)
-                end end)
-    end 
-
-    ex = Expr(:block)
-    ex.args = exs
-
-    return ex
-end   
-
-function test1(varlist)
-    exs = []
-
-    for s in varlist
-        ss = """\"$(s)\""""
-        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
-        push!(exs, quote if $q 
-                println(Symbol($ss))
-                end end)
-    end 
-
-    ex = Expr(:block)
-    ex.args = exs
-
-    return ex
-end   
-
-function test1(var_to_tmp::Dict)
-    exs = []
-
-    for (k, s) in var_to_tmp
-        ss = """\"$(s)\""""
-        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
-        push!(exs, quote if $q 
-                println(Symbol($ss))
-                end end)
-    end 
-
-    ex = Expr(:block)
-    ex.args = exs
-
-    return ex
-end   
-
-
-"""
-Attempts to add variable `name` to the dictionary.
-Fail gracefully if not allowed.
-"""
-function add_tmpvar_to_dict(tmp_name, orig_name, this_state)
-    t1 = eval(typeof(tmp_name))
-
-    if !(isa(t1,Module) || isa(t1, Function))
-        try
-            this_state[Symbol(orig_name)] = eval(tmp_name)
-        catch
-            println(Symbol(orig_name), " -> ", tmp_name) 
-        end
-    end
-end 
 
 """
 Creates a block that when executed saves the tmp vars in `past`.
@@ -163,17 +98,23 @@ function save_state_block(var_to_tmp)
 
 
     for (k, s) in var_to_tmp
-        println(k, " ", s)
+        println(k, " ", s, " ", can_copy(@eval Main $k)) 
 
         ss = """\"$(s)\""""
         kk = """$(k)"""
 
         ss2 = "\$($(s))"
 
+
         #q = Meta.parse("""this_state[Symbol($kk)] = eval(Symbol($(ss)))""")
-        q = :(this_state[Symbol($(esc(kk)))] = $(esc(s)))
+        #q = :(this_state[Symbol($(esc(kk)))] = can_copy($(esc(s))) ? deepcopy($(esc(s))) : nothing )
+        q = quote  if can_copy($(esc(s)))
+            this_state[Symbol($(esc(kk)))] =  deepcopy($(esc(s))) 
+        end
+        end
         push!(exs, q)
     end     
+
 
 
     #push!(exs, Symbol("this_state"))    
@@ -290,7 +231,7 @@ macro spawn(ex::Expr)
 
     var_to_tmp, tmp_to_var = variable_maps(varlist)
 
-    ex_rename = rename_block(varlist, var_to_tmp)
+    ex_rename = sandbox_variable_block(varlist, var_to_tmp)
     ex_new = subs_variables(ex, var_to_tmp)
     ex_clear = clear_block(var_to_tmp)
 
@@ -384,3 +325,56 @@ macro badspawn(ex::Expr)
     end
 
 end
+
+
+function test(varlist)
+    exs = []
+
+    for s in varlist
+        ss = """\"$(s)\""""
+        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
+        push!(exs, quote if $q 
+                println($s)
+                end end)
+    end 
+
+    ex = Expr(:block)
+    ex.args = exs
+
+    return ex
+end   
+
+function test1(varlist)
+    exs = []
+
+    for s in varlist
+        ss = """\"$(s)\""""
+        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
+        push!(exs, quote if $q 
+                println(Symbol($ss))
+                end end)
+    end 
+
+    ex = Expr(:block)
+    ex.args = exs
+
+    return ex
+end   
+
+function test1(var_to_tmp::Dict)
+    exs = []
+
+    for (k, s) in var_to_tmp
+        ss = """\"$(s)\""""
+        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
+        push!(exs, quote if $q 
+                println(Symbol($ss))
+                end end)
+    end 
+
+    ex = Expr(:block)
+    ex.args = exs
+
+    return ex
+end   
+
