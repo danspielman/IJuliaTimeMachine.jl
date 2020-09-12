@@ -229,9 +229,9 @@ macro thread(ex::Expr)
         $(ex_rename)
         Threads.@spawn begin    
             val = $(ex_new)  
-            Threads.lock(out_lock) do 
-                IJulia.Out[$(n)] = can_copy(val) ? deepcopy(val) : nothing
-            end
+            out = can_copy(val) ? deepcopy(val) : nothing
+            push!(out_queue, Out_Pair($(n), out))
+ 
             if $(saveit)
                 $(ex_save) 
                 Threads.lock(past_lock) do
@@ -246,6 +246,16 @@ macro thread(ex::Expr)
         end
     end
 
+end
+
+function process_out_queue()
+    while !(isempty(out_queue))
+        q = pop!(out_queue)
+        Threads.lock(out_lock) do 
+            IJulia.Out[q.n] = q.out
+        end
+        debug_mode && println(IJulia.orig_stdout[], "placed out from cell $(q.n)") 
+    end
 end
 
 

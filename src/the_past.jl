@@ -5,8 +5,10 @@ Start saving the states of the notebook.
 Is run when module is initialized.
 """
 function start_saving()
-    global saving = true
-    IJulia.push_postexecute_hook(save_state)
+    if !saving
+        global saving = true
+        IJulia.push_postexecute_hook(save_state)
+    end
 end
 
 """

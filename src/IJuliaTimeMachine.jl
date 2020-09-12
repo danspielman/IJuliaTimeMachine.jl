@@ -9,6 +9,7 @@ module IJuliaTimeMachine
     end
 
     function __init__()
+        IJulia.push_preexecute_hook(process_out_queue)
         start_saving()
         nothing
     end
@@ -23,7 +24,13 @@ module IJuliaTimeMachine
     end
 
     const past = Dict{Int,IJulia_State}()
-    const TMOut = Dict{Int,Any}()
+
+    struct Out_Pair
+        n::Int
+        out::Any
+    end
+
+    const out_queue = Vector{Out_Pair}()
 
     # we use these locks to (hopefully) avoid two threads writing to IJulia.out or TM.past at the same time.
     # Unfortunately, there is still a chance of error here when IJulia writes to Out.
