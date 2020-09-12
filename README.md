@@ -59,19 +59,42 @@ It stores them in `TM.past`.
 * The way that we copy and rename variables is a little crude, and relies on a poor understanding of Julia Exprs.  It should be cleaned up. It might make mistakes.
 
 
+* can_copy returns false on IJulia.Out, and probably should on past
+* so, do not store Out or past .
+
 # To do
 
-# URGENT: deep copy to make safe.  and, only deepcopy vars for which we can.
+
+
+* do not store Out in past.  and, maybe don't even put it in ans?  not sure.
+* use a queue to move our generated out items to IJulia's out items, make it a preexecution hook.
+* bad examples are things that point to themselves.  they will break `can_copy` causing a stack overflow.  need to fix that.  examples like `x = []; push!(x,x)`
+
+
+* need to break error if just look at Out ... not sure why the error, but some sort of loop happens.
+* maybe keep our output in TMOut.  And, could just redirect Julia's out ptr to ours. depends on when it is set.
+* maybe we could use a precell hook to check if Outs need to be cleaned up.
+* we could have a queue of those that need fixing - and are put into the queue when the jobs finish.
+* Or, can I disable IJulia's store history?
+
+* in execute request, it stores history, then runs preexecute, then code, then store output, then postexecute.
+So, preexecute could turn off store history, and postexecute could turn it back on, allowing us to do the storage into out.  We would store result / ans, just like Julia does?  But, make it locking. except that store history is not a variable we can change.  it is local.
+
+* put in some locks
+
+* could give it a save option
 
 * Fix: output from printlns appears all over, and can not control that.
 
-* when copy variables to make safe spawn, we need to do a deepcopy in case they are modified.
-* but, then also need to be sure can do a deepcopy of it
+* add an option to declare a variable not for copy, so we don't mess with big data.
+
 
 * Come up with better names for all the routines in the interface.
 
 * Find a way to copy and save functions (maybe using IRtools)
+
 * Find a way to capture the output (sent to stdout) of spawned processes.
+
 * Create a GUI to keep track of which spawned processes are running, and which have finished.
 
 * The saving of the past is a little inefficient right now in that it copies all variables at all times. Implement something that only makes copies of new variables (using a hash).
