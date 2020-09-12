@@ -5,6 +5,7 @@ Start saving the states of the notebook.
 Is run when module is initialized.
 """
 function start_saving()
+    global saving = true
     IJulia.push_postexecute_hook(save_state)
 end
 
@@ -12,7 +13,10 @@ end
 Stop saving states of the notebook.
 """
 function stop_saving()
-    IJulia.pop_postexecute_hook(save_state)
+    if saving 
+        global saving = false
+        IJulia.pop_postexecute_hook(save_state)
+    end
 end
 
 """
@@ -30,8 +34,17 @@ end
 can_copy(x::Union{Core.MethodInstance,Module,Method,GlobalRef,UnionAll,Task,Regex,Function}) = false
 can_copy(x::Union{Symbol, DataType, Union, String}) = true
 can_copy(x::Union{Tuple,Core.SimpleVector,Array}) = all(can_copy.(x))
-can_copy(x::Dict) = all([can_copy((k,s)) for (k,s) in x])
+function can_copy(x::Dict) 
+    if x === IJulia.Out
+        return false
+    end
 
+    if x === past
+        return false
+    end
+
+    return all([can_copy((k,s)) for (k,s) in x])
+end
 
 """
 Go over every symbol in Main.  
@@ -46,19 +59,25 @@ function vars_to_state()
         end
     end
 
-    ans = IJulia.ans
-    ansc = can_copy(ans) ? deepcopy(ans) : nothing
-
-    return IJulia_State(this_state, ansc)
+    return this_state
 end
 
 """
 Save the current variables and ans is `past[cell_number]`.
 """
 function save_state()    
-    past[IJulia.n] = vars_to_state()
-    if Base.summarysize(past) > Sys.total_memory()/3
-        @warn "IJuliaTimeMachine state takes over 1/3 of system memory.  Consider IJuliaTimeMachine.clear_state()."
+    if !(IJulia.n ∈ spawned)
+        this_state = vars_to_state()
+        ans = IJulia.ans
+        ansc = can_copy(ans) ? deepcopy(ans) : nothing   
+        Threads.lock(past_lock) do
+            past[IJulia.n] = IJulia_State(this_state, ansc)
+        end
+
+        if Base.summarysize(past) > Sys.total_memory()/3
+            @warn "IJuliaTimeMachine state takes over 1/3 of system memory.  Consider IJuliaTimeMachine.clear_state()."
+        end
+        debug_mode && println(IJulia.orig_stdout[], "Saved state $(IJulia.n)")
     end
 end
 
@@ -67,7 +86,13 @@ end
 
 Return to the state after cell `n` was exectued.
 """
-macro past(n)
+macro past(n_in)
+
+    n = n_in
+    if typeof(n_in) == Symbol
+        n = @eval Main $(n_in)
+    end
+
     if haskey(past, n)
         local s = past[n].vars
         local ans = past[n].ans
@@ -82,6 +107,7 @@ macro past(n)
         end
     end
 end
+
 
 """
 Empty all storage of the past.  Use to free up memory.
