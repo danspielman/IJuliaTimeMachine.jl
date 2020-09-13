@@ -40,7 +40,7 @@ To find out how many this could be, you could start Julia with the `-t auto` opt
 
 
 ~~~julia
-> using Pkg; Pkg.add("https://github.com/danspielman/IJuliaTimeMachine.jl")
+> using Pkg; Pkg.add(url="https://github.com/danspielman/IJuliaTimeMachine.jl")
 ~~~
 
 Once you are running a Jupyter notebook, you can start the time machine by typing
