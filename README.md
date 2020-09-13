@@ -86,6 +86,11 @@ end
 
 You can find a demonstration of the time machine in action in the `examples` directory.
 It is saved as a Jupyter notebook, html, and pdf.
+To find the directory this package is in, try
+
+~~~julia
+Base.find_package("IJuliaTimeMachine")
+~~~
 
 # Bugs
 
@@ -133,5 +138,6 @@ Please take on one of these tasks!
 
 * Think of what other features this needs.
 
-* Improve the documentation so we can release it to the public.
+* Improve the documentation so we can release it to the public.  Really, we need to set up documenter.
 
+* Note: to modify the package, type `] dev IJuliaTimeMachine`.  You might need to check out some information about developing packages.
