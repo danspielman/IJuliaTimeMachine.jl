@@ -8,11 +8,7 @@ module IJuliaTimeMachine
         global debug_mode = x
     end
 
-    function __init__()
-        IJulia.push_preexecute_hook(process_out_queue)
-        start_saving()
-        nothing
-    end
+    saving = false
 
     """
     `vars` is a dictionary of the variables at the time.
@@ -47,10 +43,13 @@ module IJuliaTimeMachine
     const running = Set()
     const finished = Vector{Int}()
 
-    saving = true
-
     include("the_past.jl")
     include("spawn.jl")
 
+    function __init__()
+        IJulia.push_preexecute_hook(process_out_queue)
+        start_saving()
+        nothing
+    end
 
 end

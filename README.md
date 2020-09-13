@@ -1,20 +1,46 @@
 # IJuliaTimeMachine
 
-This package provides two capabilities that can be very useful when running computational experiments in IJulia notebooks:
+This package provides two capabilities that can be  useful when running computational experiments in IJulia notebooks:
 * It allows you to return all variables to a previous state (the past).
 I often run experiments in Julia cells that can take minutes to hours to complete.
 Sometimes, I want to re-examine the variables in a cell, but I have already over-written them.
 This makes it easy to recall them.
 
 * It allows you to spawn a process to run on another thread while you keep writing other cells (the future).
-The process copies all of its variables to variables of new names before running, so it does not effect other cells.
+The process copies all of its variables to variables of new names before running, so it does not impact other cells.
 This is especially useful if you plan to run many similar experiments.  
 Now, you can just copy, paste and modify cells before running them.
 
 # Installation
 
+To check how many threads you have available, type
+
 ~~~julia
-> using Pkg; Pkg.add("IJuliaTimeMachine")
+> Threads.nthreads()
+~~~
+
+If you only have one, but should have more, then you have to do some configuration.
+
+To make sure that your Jupyter notebook starts with threads, 
+and you are running Jupyter from a cell, you could type
+
+~~~shell
+export JULIA_NUM_THREADS=4
+jupyter notebook
+~~~
+
+Or, on a Mac, put the following line in the file
+`~/.profile`:
+~~~shell
+export JULIA_NUM_THREADS=2
+~~~
+
+Of course, replace 2 or 4 with the number of threads you should have.  Usually, this is twice the number of cores.
+To find out how many this could be, you could start Julia with the `-t auto` option, and then check how many threads it chooses to start with.
+
+
+~~~julia
+> using Pkg; Pkg.add("https://github.com/danspielman/IJuliaTimeMachine.jl")
 ~~~
 
 Once you are running a Jupyter notebook, you can start the time machine by typing
@@ -42,12 +68,38 @@ To stop saving state, type `TM.stop_saving()`.  To start up again, type `TM.star
 If you need to free up memory, type `TM.clear_past()` to clear all the saved state information.
 `TM.clear_past(cells)` clears the states in the iterator (or range) given by `cells`.
 
+You can run code in a thread by using `TM.@thread`.  It can be used at most once per cell.
+Examples are like.
+
+~~~julia
+TM.@thread my_intensive_function(x)
+~~~
+
+~~~julia
+TM.@thread begin
+    a number of computationally intense lines
+end
+~~~
+
 `TM.running` keeps track of cells that are running.
 `TM.finished` of course keeps track of those that stopped.
 
-# Details
+You can find a demonstration of the time machine in action in the `examples` directory.
+It is saved as a Jupyter notebook, html, and pdf.
 
-* undefined problem solved with `global` in front of variable.
+# Bugs
+
+* Any data structures with circular references will cause a stack overflow.
+The problem is in the routine `can_copy`.
+
+* Output from threads that is supposed to go to stdout winds up in whatever cell is current.
+It would be terrific to capture this instead, and ideally make it something we can play back later.
+
+* If you look at Demo, you will see some bug that happened when we tried to launch two threads from one cell: one of them is listed as running when it should have finished.
+
+* There must be more!  Please try it and find them.
+
+# Details
 
 * The state saving features work by using an IJulia `postexecute_hook`.
 
@@ -56,46 +108,30 @@ It stores them in `TM.past`.
 
 * The Time Machine only saves variables that can be copied with deepcopy.  In particular, it does not save functions.  It would be nice to add a way to copy functions.
 
-* The way that we copy and rename variables is a little crude, and relies on a poor understanding of Julia Exprs.  It should be cleaned up. It might make mistakes.
+* The use of Julia macros in this code is a little crude.  It should probably be cleaned up.
 
-
-* can_copy returns false on IJulia.Out, and probably should on past
-* so, do not store Out or past .
 
 # To do
 
+Please take on one of these tasks!
+
+* Fix `can_copy` so that it doesn't break on examples like `x = []; push!(x,x)`. 
+  (look at the code for deepcopy to see how to fix it)
+
+* Fix any other bug listed above.
+
+* The saving of the past is a inefficient right now in that it copies all variables at all times. Implement something that only makes copies of new variables, and just gives pointers to old ones (using a hash).
 
 
-* do not store Out in past.  and, maybe don't even put it in ans?  not sure.
-* use a queue to move our generated out items to IJulia's out items, make it a preexecution hook.
-* bad examples are things that point to themselves.  they will break `can_copy` causing a stack overflow.  need to fix that.  examples like `x = []; push!(x,x)`
-
-
-* need to break error if just look at Out ... not sure why the error, but some sort of loop happens.
-* maybe keep our output in TMOut.  And, could just redirect Julia's out ptr to ours. depends on when it is set.
-* maybe we could use a precell hook to check if Outs need to be cleaned up.
-* we could have a queue of those that need fixing - and are put into the queue when the jobs finish.
-* Or, can I disable IJulia's store history?
-
-* in execute request, it stores history, then runs preexecute, then code, then store output, then postexecute.
-So, preexecute could turn off store history, and postexecute could turn it back on, allowing us to do the storage into out.  We would store result / ans, just like Julia does?  But, make it locking. except that store history is not a variable we can change.  it is local.
-
-* put in some locks
-
-* could give it a save option
-
-* Fix: output from printlns appears all over, and can not control that.
-
-* add an option to declare a variable not for copy, so we don't mess with big data.
-
+* add an option to declare a variable not for copy, so we don't make many copies of big data items.
 
 * Come up with better names for all the routines in the interface.
 
 * Find a way to copy and save functions (maybe using IRtools)
 
-* Find a way to capture the output (sent to stdout) of spawned processes.
-
 * Create a GUI to keep track of which spawned processes are running, and which have finished.
 
-* The saving of the past is a little inefficient right now in that it copies all variables at all times. Implement something that only makes copies of new variables (using a hash).
+* Think of what other features this needs.
+
+* Improve the documentation so we can release it to the public.
 
