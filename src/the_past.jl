@@ -27,16 +27,29 @@ end
 Is supposed to return true if deepcopy works on x.
 The code to test this is based on deepcopy, but it could get some strange case wrong.
 """
-function can_copy(x) 
+can_copy(x) = can_copy(x, IdDict())
+can_copy(x::Union{Core.MethodInstance,Module,Method,GlobalRef,UnionAll,Task,Regex,Function}, id) = false
+can_copy(x::Union{Symbol, DataType, Union, String}, id) = true
+
+function can_copy(x, id) 
     isbitstype(typeof(x)) && return true
+    haskey(id, x) && return true
+    id[x] = true
     nf = nfields(x)
     nf == 0 && return true
-    return all(can_copy.(getfield(x,i) for i in 1:nf))
+    id[x] = true
+    return all([can_copy(getfield(x,i),id) for i in 1:nf])
 end
-can_copy(x::Union{Core.MethodInstance,Module,Method,GlobalRef,UnionAll,Task,Regex,Function}) = false
-can_copy(x::Union{Symbol, DataType, Union, String}) = true
-can_copy(x::Union{Tuple,Core.SimpleVector,Array}) = all(can_copy.(x))
-function can_copy(x::Dict) 
+
+function can_copy(x::Union{Tuple,Core.SimpleVector,Array}, id) 
+    haskey(id, x) && return true
+    id[x] = true
+    all([can_copy(xi, id) for xi in x])
+end
+
+function can_copy(x::Dict, id) 
+    haskey(id, x) && return true
+    id[x] = true
     if x === IJulia.Out
         return false
     end
@@ -45,7 +58,7 @@ function can_copy(x::Dict)
         return false
     end
 
-    return all([can_copy((k,s)) for (k,s) in x])
+    return all([can_copy((k,s), id) for (k,s) in x])
 end
 
 """

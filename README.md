@@ -94,9 +94,6 @@ Base.find_package("IJuliaTimeMachine")
 
 # Bugs
 
-* Any data structures with circular references will cause a stack overflow.
-The problem is in the routine `can_copy`.
-
 * Output from threads that is supposed to go to stdout winds up in whatever cell is current.
 It would be terrific to capture this instead, and ideally make it something we can play back later.
 
@@ -115,13 +112,11 @@ It stores them in `TM.past`.
 
 * The use of Julia macros in this code is a little crude.  It should probably be cleaned up.
 
+* We try to only copy things that deepcopy can copy. I am not positive this works correctly.
 
 # To do
 
 Please take on one of these tasks!
-
-* Fix `can_copy` so that it doesn't break on examples like `x = []; push!(x,x)`. 
-  (look at the code for deepcopy to see how to fix it)
 
 * Fix any other bug listed above.
 
