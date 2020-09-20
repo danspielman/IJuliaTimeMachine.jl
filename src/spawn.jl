@@ -28,7 +28,12 @@ It returns them in a Set of Symbols.
 """
 function extract_symbols(ex::Expr) 
     start = ex.head == :macrocall ? 2 : 1
-    union((extract_symbols(arg) for arg in ex.args[start:end])...)
+    start = ex.head == :macrocall ? 2 : 1
+    if length(ex.args) >= start
+        return union((extract_symbols(arg) for arg in ex.args[start:end])...)
+    else
+        return Set{Symbol}()
+    end
 end
 extract_symbols(ex::Symbol) = Set{Symbol}([ex])
 extract_symbols(ex) = Set{Symbol}()
