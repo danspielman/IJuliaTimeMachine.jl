@@ -118,6 +118,14 @@ It stores them in `TM.past`.
 
 Please take on one of these tasks!
 
+* rewrite spawn so it really just creates a let block.
+
+* cleanup failed jobs in the list of jobs that are running. will run at the start of a cell, and will need a list of running tasks.
+
+* create alerts for when jobs finish
+
+* check if push to out_queue is thread safe. if it is, handle past the same way.
+
 * Fix any other bug listed above.
 
 * The saving of the past is a inefficient right now in that it copies all variables at all times. Implement something that only makes copies of new variables, and just gives pointers to old ones (using a hash).

@@ -22,12 +22,12 @@ make threaded (is that an issue)?
 
 
 """
-The goal of extract_symbols is to find all the variables that we need to rename.
-Ideally, it would do exactly this.  Right now it probably doesn't.
+The goal of extract_symbols is to find all the variables that appear in a block.
 It returns them in a Set of Symbols.
+This will return many more symbols than we want, so we only save those that we can copy.
 """
 function extract_symbols(ex::Expr) 
-    start = ex.head == :macrocall ? 2 : 1
+    ex.head == :-> && return Set{Symbol}()
     start = ex.head == :macrocall ? 2 : 1
     if length(ex.args) >= start
         return union((extract_symbols(arg) for arg in ex.args[start:end])...)
@@ -38,81 +38,37 @@ end
 extract_symbols(ex::Symbol) = Set{Symbol}([ex])
 extract_symbols(ex) = Set{Symbol}()
 
-"""
-    var_to_tmp, tmp_to_var = variable_maps(varlist)
-
-Create maps to new names for the variables in varlist.
-"""
-function variable_maps(varlist)
-    var_to_tmp = Dict{Symbol,Symbol}()
-    tmp_to_var = Dict{Symbol,Symbol}()
-
-    for s in varlist
-        gs = gensym(s)
-        var_to_tmp[s] = gs
-        tmp_to_var[gs] = s
-    end
-
-    return var_to_tmp, tmp_to_var
-end
 
 """
-    mapped_ex = subs_variables(ex::Expr, mapping::Dict)
-
-Go through the Expr and use mapping to replace every symbol 
-discovered by extract_symbols.
+Creates the let statement for all copyable variables.
 """
-subs_variables(ex, mapping) = ex
-subs_variables(s::Symbol, mapping::Dict) = 
-    haskey(mapping, s) ? esc(mapping[s]) : s        
-function subs_variables(ex::Expr, mapping::Dict) 
-    start = ex.head == :macrocall ? 2 : 1 
-    Expr(ex.head, (subs_variables(a, mapping) for a in ex.args[start:end])...)   
-end
-
-"""
-Creates a block that when executed sandboxes all copyable variables.
-"""
-function sandbox_variable_block(varlist, var_to_tmp)
+function let_block(varlist)
     exs = []
 
-    for (s, t) in var_to_tmp       
-        ss = """\"$(s)\""""
-        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
-        push!(exs, quote if $q 
-                if can_copy(@eval Main $(s))
-                    $(esc(t)) = deepcopy(@eval Main $(s))
-                else
-                    $(esc(t)) = $(esc(s))
-                end
-                end end)
-    end 
+    for s in varlist
+        if can_copy(@eval Main $s)
+            ex = :($(s) = deepcopy($(s)))
+            push!(exs,ex)
+        end
+    end
 
-    ex = Expr(:block)
-    ex.args = exs
-
-    return ex
+    return Expr(:block, exs...)
 end
 
 """
 Creates a block that when executed saves the tmp vars in `past`.
 """
-function save_state_block(var_to_tmp)
+function save_state_block(varlist)
     exs = []
 
-    # commented out because it should already exist
-    # exs = push!(exs,:(this_state = Dict{Any,Any}())) 
+    for k in varlist
+        debug_mode && println(IJulia.orig_stdout[], k, " ", can_copy(@eval Main $k)) 
 
-
-    for (k, s) in var_to_tmp
-        debug_mode && println(IJulia.orig_stdout[], k, " ", s, " ", can_copy(@eval Main $k)) 
-
-        ss = """\"$(s)\""""
         kk = """$(k)"""
 
 
-        q = quote  if can_copy($(esc(s)))
-            this_state[Symbol($(esc(kk)))] =  deepcopy($(esc(s))) 
+        q = quote  if IJuliaTimeMachine.can_copy($(k))
+            this_state[Symbol($(kk))] =  deepcopy($(k)) 
         end
         end
         push!(exs, q)
@@ -124,41 +80,8 @@ function save_state_block(var_to_tmp)
     return ex
 end
 
-#=
-
-this_state[Symbol($kk)] = esc($s)
-
-q = Meta.parse("""if isdefined(IJuliaTimeMachine,Symbol($ss))
-            this_state[Symbol($kk)] = deepcopy(eval(Symbol($ss)))
-        end""")   
-        =#
-
-# IJuliaTimeMachine.add_tmpvar_to_dict(Symbol($ss), Symbol($kk), this_state)
 
 
-"""
-Creates a block that when executed sets all tmp variables to nothing
-"""
-function cleanup_block(var_to_tmp)
-    exs = []
-
-    for (s, t) in var_to_tmp       
-        tt = """$(t)""" 
-
-        push!(exs, :(global $(esc(t)) = nothing))
-        #=
-        q = Meta.parse("""isdefined(Main, Symbol($tt))""")        
-        push!(exs, quote if $q 
-            $(t) = nothing
-                end end)
-                =#
-    end 
-
-    ex = Expr(:block)
-    ex.args = exs
-
-    return ex
-end
 
 
 """
@@ -217,41 +140,68 @@ macro thread(ex::Expr)
     varlist = extract_symbols(ex)
 
     debug_mode && println(IJulia.orig_stdout[], varlist) 
+    let_blk = let_block(varlist)   
 
-    var_to_tmp, tmp_to_var = variable_maps(varlist)
+    end_str = "end"
 
-    ex_rename = sandbox_variable_block(varlist, var_to_tmp)
-    ex_new = subs_variables(ex, var_to_tmp)
-    ex_save = saveit ? save_state_block(var_to_tmp) : nothing
-    ex_cleanup = cleanup_block(var_to_tmp)
+    debug_mode &&  println(IJulia.orig_stdout[], let_blk) 
+
+    ex_save = saveit ? save_state_block(varlist) : nothing
+
+    debug_mode && println(IJulia.orig_stdout[], ex_save) 
+
+    q = quote
+        if $(saveit)
+            this_state = IJuliaTimeMachine.vars_to_state()   
+        end
+
+        Threads.@spawn begin
+            val = $(ex)
+            out = IJuliaTimeMachine.can_copy(val) ? deepcopy(val) : nothing
+            push!(IJuliaTimeMachine.out_queue, IJuliaTimeMachine.Out_Pair($(n), out))
+
+            if $(saveit)
+                $(ex_save) 
+                Threads.lock(IJuliaTimeMachine.past_lock) do
+                    IJuliaTimeMachine.past[$n] = IJuliaTimeMachine.IJulia_State(this_state, val)
+                end
+            end
+
+            push!(finished, $n)
+            $n ∈ running && delete!(running, $n)
+
+        end
+    end
+
+    letq = Expr(:let, let_blk, q)
 
     return quote
         push!(running, $n)
         push!(spawned, $n)
-        if $(saveit)
-            this_state = vars_to_state()   
-        end
-        $(ex_rename)
-        Threads.@spawn begin    
-            val = $(ex_new)  
-            out = can_copy(val) ? deepcopy(val) : nothing
-            push!(out_queue, Out_Pair($(n), out))
- 
-            if $(saveit)
+    
+        $(esc(letq))
+        
+    end
+
+end
+
+
+
+
+#=
+           if $(saveit)
                 $(ex_save) 
                 Threads.lock(past_lock) do
                     past[$n] = IJulia_State(this_state, val)
                 end
             end
 
-            $(ex_cleanup)
-
             push!(finished, $n)
             $n ∈ running && delete!(running, $n)
-        end
-    end
 
-end
+            =#
+
+
 
 function process_out_queue()
     while !(isempty(out_queue))

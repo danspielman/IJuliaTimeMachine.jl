@@ -6,6 +6,7 @@ module IJuliaTimeMachine
     debug_mode = false
     function debug!(x::Bool = true)
         global debug_mode = x
+        println("debug: $(x)")
     end
 
     saving = false
