@@ -117,22 +117,26 @@ macro thread(ex::Expr)
 
     debug_mode && println(IJulia.orig_stdout[], ex_save) 
 
+    val = gensym("val")
+    out = gensym("out")
+
     q = quote
         if $(saveit)
             this_state = IJuliaTimeMachine.vars_to_state()   
         end
 
         task = Threads.@spawn begin
-            val = $(ex)
+            println("hi2")
+            $(val) = $(ex)
 
             Threads.lock(IJuliaTimeMachine.tm_lock) do 
                 
-                out = IJuliaTimeMachine.can_copy(val) ? deepcopy(val) : nothing
-                push!(IJuliaTimeMachine.out_queue, IJuliaTimeMachine.Queue_Pair($(n), out))
+                $(out) = IJuliaTimeMachine.can_copy($(val)) ? deepcopy($(val)) : nothing
+                push!(IJuliaTimeMachine.out_queue, IJuliaTimeMachine.Queue_Pair($(n), $(out)))
 
                 if $(saveit)
                     $(ex_save) 
-                    push!(IJuliaTimeMachine.past_queue, IJuliaTimeMachine.Queue_Pair($(n), IJuliaTimeMachine.IJulia_State(this_state, out)))
+                    push!(IJuliaTimeMachine.past_queue, IJuliaTimeMachine.Queue_Pair($(n), IJuliaTimeMachine.IJulia_State(this_state, $(out))))
                 end                
 
                 push!(IJuliaTimeMachine.finished, $n)
