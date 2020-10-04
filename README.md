@@ -63,7 +63,9 @@ To see the answer computed in cell 20, examine `Out[20]`.
 
 To go back to the state as it was after cell 20, at any time, type `TM.@past 20`.
 
-To stop saving state, type `TM.stop_saving()`.  To start up again, type `TM.start_saving()`.
+If you just want to look at a dictionary of the variables from cell 20, type `TM.vars(20)`.
+
+To stop saving state, type `TM.saving!(false)`.  To start up again, type `TM.saving!(true)`.
 
 If you need to free up memory, type `TM.clear_past()` to clear all the saved state information.
 `TM.clear_past(cells)` clears the states in the iterator (or range) given by `cells`.
@@ -84,6 +86,10 @@ end
 `TM.running` keeps track of cells that are running.
 `TM.finished` of course keeps track of those that stopped.
 
+By default, notifications about finished cells are printed to the terminal from which Jupyter was started.  You can turn this on or off with `TM.notify_terminal!()`.  
+You can choose to have notifications printed to the current Jupyter cell by setting `TM.notify_jupyter!(true)`.
+
+
 You can find a demonstration of the time machine in action in the `examples` directory.
 It is saved as a Jupyter notebook, html, and pdf.
 To find the directory this package is in, try
@@ -94,10 +100,10 @@ Base.find_package("IJuliaTimeMachine")
 
 # Bugs
 
-* Output from threads that is supposed to go to stdout winds up in whatever cell is current.
+* Output from @thread that is supposed to go to stdout winds up in whatever cell is current.
 It would be terrific to capture this instead, and ideally make it something we can play back later.
 
-* If you look at Demo, you will see some bug that happened when we tried to launch two threads from one cell: one of them is listed as running when it should have finished.
+* Sometimes we get an error that says `error in running finalizer: ErrorException("concurrency violation detected")`.  Not sure why.
 
 * There must be more!  Please try it and find them.
 
@@ -117,14 +123,6 @@ It stores them in `TM.past`.
 # To do
 
 Please take on one of these tasks!
-
-* rewrite spawn so it really just creates a let block.
-
-* cleanup failed jobs in the list of jobs that are running. will run at the start of a cell, and will need a list of running tasks.
-
-* create alerts for when jobs finish
-
-* check if push to out_queue is thread safe. if it is, handle past the same way.
 
 * Fix any other bug listed above.
 

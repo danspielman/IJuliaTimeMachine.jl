@@ -126,7 +126,7 @@ macro thread(ex::Expr)
         end
 
         task = Threads.@spawn begin
-            println("hi2")
+
             $(val) = $(ex)
 
             Threads.lock(IJuliaTimeMachine.tm_lock) do 
@@ -143,6 +143,9 @@ macro thread(ex::Expr)
                 $n ∈ IJuliaTimeMachine.running && delete!(IJuliaTimeMachine.running, $n)
 
             end
+
+            IJuliaTimeMachine.notify_jupyter && println("Cell ", $n, " finished.")
+            IJuliaTimeMachine.notify_terminal && println(IJulia.orig_stdout[], "Cell ", $n, " finished.")               
 
         end
 
@@ -177,6 +180,21 @@ function tm_cleanup()
             q = pop!(past_queue)
             past[q.n] = q.out
             debug_mode && println(IJulia.orig_stdout[], "placed past from cell $(q.n)") 
+        end
+
+        for n ∈ running
+            if istaskfailed(tasks[n])
+                delete!(running, n)
+                notify_jupyter && println("Cell $n had an error.")
+                notify_terminal && println(IJulia.orig_stdout[], "Cell $n had an error.")               
+                
+            else
+                if istaskdone(tasks[n])
+                    delete!(running, n)
+                    notify_jupyter && println("Something went wrong with task $(n).")
+                    notify_terminal && println(IJulia.orig_stdout[], "Something went wrong with task $(n).")
+                end
+            end
         end
     end 
 end

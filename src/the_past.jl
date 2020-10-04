@@ -1,25 +1,5 @@
 # Functions related to capturing the past states of the notebook
 
-"""
-Start saving the states of the notebook.  
-Is run when module is initialized.
-"""
-function start_saving()
-    if !saving
-        global saving = true
-        IJulia.push_postexecute_hook(save_state)
-    end
-end
-
-"""
-Stop saving states of the notebook.
-"""
-function stop_saving()
-    if saving 
-        global saving = false
-        IJulia.pop_postexecute_hook(save_state)
-    end
-end
 
 """
     can_copy(x)
@@ -140,4 +120,13 @@ function clear_past(indices)
     end
 end
 
-
+"""
+Returns the variables saved in a given cell as a dictionary.
+"""
+function vars(n::Int)
+    if haskey(past[n])
+        return past[n].vars
+    else
+        println("Cell $n was not saved.")
+    end
+end

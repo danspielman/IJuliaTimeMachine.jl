@@ -1,7 +1,12 @@
 module IJuliaTimeMachine
 
     import IJulia
-    #using Markdown
+
+    #===========================================
+
+    Variables that change behavior of the time machine
+
+    =#
 
     debug_mode = false
     function debug!(x::Bool = true)
@@ -10,6 +15,64 @@ module IJuliaTimeMachine
     end
 
     saving = false
+
+    """
+        saving!(bool)
+
+    Turn saving of state on or off.  Works by pushing or poping an IJulia postexecute_hook.
+    True by default.
+    """
+    function saving!(x = true)
+        global saving = x
+        if saving 
+            IJulia.push_postexecute_hook(save_state)
+        else
+            IJulia.pop_postexecute_hook(save_state)
+        end                
+    end
+
+    notify_jupyter = false
+    notify_terminal = false
+    notify_gui = false
+
+    """
+        notify_jupyter!(bool)
+
+    If true, Print notifications about finishing jobs to the current jupyter output cell.
+    """
+    function notify_jupyter!(x::Bool = true)
+        global notify_jupyter = x
+    end
+
+    """
+    notify_terminal!(bool)
+
+    If true, Print notifications about finishing jobs to the terminal from which jupyter was started.
+    """
+    function notify_terminal!(x::Bool = true)
+        global notify_terminal = x
+    end
+
+    #================================================
+
+    Variables the user might want to consult
+
+    spawned lists the cells that have been spawned off
+    running is the subset that are still running
+    finished is the ones that completed 
+    tasks is gives a reference to the task run in a given cell.
+    =#
+    const spawned = Set()
+    const running = Set()
+    const finished = Vector{Int}()
+    const tasks = Dict{Int,Task}()
+
+
+    #==================================
+
+    Intended for internal use only
+
+    =#
 
     """
     `vars` is a dictionary of the variables at the time.
@@ -37,23 +100,20 @@ module IJuliaTimeMachine
     # The part that is executed during a thread has a lock.
     tm_lock = Threads.SpinLock()
 
-    #=
-    spawned lists the cells that have been spawned off
-    running is the subset that are still running
-    finished is the ones that completed 
-    tasks is gives a reference to the task run in a given cell.
+    #================================
+
+    includes and __init__
+
     =#
-    const spawned = Set()
-    const running = Set()
-    const finished = Vector{Int}()
-    const tasks = Dict{Int,Task}()
 
     include("the_past.jl")
     include("spawn.jl")
 
     function __init__()
         IJulia.push_preexecute_hook(tm_cleanup)
-        start_saving()
+        saving!()
+        notify_terminal!()
+
         nothing
     end
 
