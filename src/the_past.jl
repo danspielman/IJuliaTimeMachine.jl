@@ -85,9 +85,7 @@ function save_state()
         this_state = vars_to_state()
         ans = IJulia.ans
         ansc = can_copy(ans) ? deepcopy(ans) : nothing   
-        Threads.lock(past_lock) do
-            past[IJulia.n] = IJulia_State(this_state, ansc)
-        end
+        past[IJulia.n] = IJulia_State(this_state, ansc)
 
         if Base.summarysize(past) > Sys.total_memory()/3
             @warn "IJuliaTimeMachine state takes over 1/3 of system memory.  Consider IJuliaTimeMachine.clear_state()."

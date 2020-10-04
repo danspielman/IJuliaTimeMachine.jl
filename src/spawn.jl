@@ -46,7 +46,7 @@ function let_block(varlist)
     exs = []
 
     for s in varlist
-        if can_copy(@eval Main $s)
+        if isdefined(Main, s) && can_copy(@eval Main $s)
             ex = :($(s) = deepcopy($(s)))
             push!(exs,ex)
         end
@@ -62,12 +62,12 @@ function save_state_block(varlist)
     exs = []
 
     for k in varlist
-        debug_mode && println(IJulia.orig_stdout[], k, " ", can_copy(@eval Main $k)) 
+        debug_mode && println(IJulia.orig_stdout[], "save_block: ", k, " ", isdefined(Main, k) && can_copy(@eval Main $k)) 
 
         kk = """$(k)"""
 
 
-        q = quote  if IJuliaTimeMachine.can_copy($(k))
+        q = quote  if @isdefined($k) && IJuliaTimeMachine.can_copy($(k))
             this_state[Symbol($(kk))] =  deepcopy($(k)) 
         end
         end
@@ -84,40 +84,9 @@ end
 
 
 
-"""
-    ans = TM.@sandbox begin
-        expression
-    end
-
-Run expression in a sandbox.  
-Rename all the variables beforehand, and clear the renamed variables after.
-Mainly wrote this to test concepts.  But, it could be useful anyway
-"""
-macro sandbox(ex::Expr)
-
-    varlist = extract_symbols(ex)
-
-    var_to_tmp, tmp_to_var = variable_maps(varlist)
-
-    ex_rename = rename_block(varlist, var_to_tmp)
-    ex_new = subs_variables(ex, var_to_tmp)
-    ex_clear = clear_block(var_to_tmp)
-
-    return quote
-        @eval Main $ex_rename
-        local val = @eval Main $ex_new
-        @eval Main $ex_clear
-        val
-    end
-end
-
-
-
-
-
 
 """
-    TM.@spawn thread
+    TM.@thread begin
         code you want to run
     end
 
@@ -142,8 +111,6 @@ macro thread(ex::Expr)
     debug_mode && println(IJulia.orig_stdout[], varlist) 
     let_blk = let_block(varlist)   
 
-    end_str = "end"
-
     debug_mode &&  println(IJulia.orig_stdout[], let_blk) 
 
     ex_save = saveit ? save_state_block(varlist) : nothing
@@ -155,29 +122,36 @@ macro thread(ex::Expr)
             this_state = IJuliaTimeMachine.vars_to_state()   
         end
 
-        Threads.@spawn begin
+        task = Threads.@spawn begin
             val = $(ex)
-            out = IJuliaTimeMachine.can_copy(val) ? deepcopy(val) : nothing
-            push!(IJuliaTimeMachine.out_queue, IJuliaTimeMachine.Out_Pair($(n), out))
 
-            if $(saveit)
-                $(ex_save) 
-                Threads.lock(IJuliaTimeMachine.past_lock) do
-                    IJuliaTimeMachine.past[$n] = IJuliaTimeMachine.IJulia_State(this_state, val)
-                end
+            Threads.lock(IJuliaTimeMachine.tm_lock) do 
+                
+                out = IJuliaTimeMachine.can_copy(val) ? deepcopy(val) : nothing
+                push!(IJuliaTimeMachine.out_queue, IJuliaTimeMachine.Queue_Pair($(n), out))
+
+                if $(saveit)
+                    $(ex_save) 
+                    push!(IJuliaTimeMachine.past_queue, IJuliaTimeMachine.Queue_Pair($(n), IJuliaTimeMachine.IJulia_State(this_state, out)))
+                end                
+
+                push!(IJuliaTimeMachine.finished, $n)
+                $n ∈ IJuliaTimeMachine.running && delete!(IJuliaTimeMachine.running, $n)
+
             end
 
-            push!(finished, $n)
-            $n ∈ running && delete!(running, $n)
-
         end
+
+        IJuliaTimeMachine.tasks[$(n)] = task
     end
 
     letq = Expr(:let, let_blk, q)
 
     return quote
-        push!(running, $n)
-        push!(spawned, $n)
+        Threads.lock(tm_lock) do 
+            push!(running, $n)
+            push!(spawned, $n)
+        end
     
         $(esc(letq))
         
@@ -187,103 +161,20 @@ end
 
 
 
-
-#=
-           if $(saveit)
-                $(ex_save) 
-                Threads.lock(past_lock) do
-                    past[$n] = IJulia_State(this_state, val)
-                end
-            end
-
-            push!(finished, $n)
-            $n ∈ running && delete!(running, $n)
-
-            =#
-
-
-
-function process_out_queue()
-    while !(isempty(out_queue))
-        q = pop!(out_queue)
-        Threads.lock(out_lock) do 
+function tm_cleanup()
+    Threads.lock(IJuliaTimeMachine.tm_lock) do 
+        while !(isempty(out_queue))
+            q = pop!(out_queue)
             IJulia.Out[q.n] = q.out
+            debug_mode && println(IJulia.orig_stdout[], "placed out from cell $(q.n)") 
         end
-        debug_mode && println(IJulia.orig_stdout[], "placed out from cell $(q.n)") 
-    end
+
+        while !(isempty(past_queue))
+            q = pop!(past_queue)
+            past[q.n] = q.out
+            debug_mode && println(IJulia.orig_stdout[], "placed past from cell $(q.n)") 
+        end
+    end 
 end
 
 
-function test(varlist)
-    exs = []
-
-    for s in varlist
-        ss = """\"$(s)\""""
-        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
-        push!(exs, quote if $q 
-                println($s)
-                end end)
-    end 
-
-    ex = Expr(:block)
-    ex.args = exs
-
-    return ex
-end   
-
-function test1(varlist)
-    exs = []
-
-    for s in varlist
-        ss = """\"$(s)\""""
-        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
-        push!(exs, quote if $q 
-                println(Symbol($ss))
-                end end)
-    end 
-
-    ex = Expr(:block)
-    ex.args = exs
-
-    return ex
-end   
-
-function test1(var_to_tmp::Dict)
-    exs = []
-
-    for (k, s) in var_to_tmp
-        ss = """\"$(s)\""""
-        q = Meta.parse("""isdefined(Main, Symbol($ss))""")        
-        push!(exs, quote if $q 
-                println(Symbol($ss))
-                end end)
-    end 
-
-    ex = Expr(:block)
-    ex.args = exs
-
-    return ex
-end   
-
-macro tst(ex::Expr)
-    varlist = extract_symbols(ex)
-    var_to_tmp, tmp_to_var = variable_maps(varlist)
-    for (k,s) in var_to_tmp
-        println(k, " ", s)
-    end
-    ex_new = subs_variables(ex, var_to_tmp)
-end
-
-macro tst2(ex::Expr)
-    varlist = extract_symbols(ex)
-    var_to_tmp, tmp_to_var = variable_maps(varlist)
-    for (k,s) in var_to_tmp
-        println(k, " ", s)
-    end
-    ex_rename = rename_block(varlist, var_to_tmp)
-    ex_new = subs_variables(ex, var_to_tmp)
-    return quote
-        $(ex_rename)
-        $(ex_new)
-    end
-end
