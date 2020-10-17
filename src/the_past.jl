@@ -123,9 +123,11 @@ end
 """
 Returns the variables saved in a given cell as a dictionary.
 """
-function vars(n::Int)
-    if haskey(past[n])
-        return past[n].vars
+vars(n::Int) = vars(past, n)
+
+function vars(di::Dict, n::Int)
+    if haskey(di,n)
+        return di[n].vars
     else
         println("Cell $n was not saved.")
     end
