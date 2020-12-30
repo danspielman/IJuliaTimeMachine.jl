@@ -36,13 +36,11 @@ function can_copy_and_hash(x, id, h)
     h = hash(typeof(x), h)
     for i in 1:nf
         tf, h = can_copy_and_hash(getfield(x,i),id,h)
-        h = hash(i,h)
         val &= tf
     end
     return val, h
 end
 
-# edited to here --------- not sure what this could be. need to fix it.
 
 function can_copy_and_hash(x::Union{Tuple,Core.SimpleVector,Array}, id, h) 
     haskey(id, x) && return (true, hash(objectid(x), h))
@@ -54,7 +52,6 @@ function can_copy_and_hash(x::Union{Tuple,Core.SimpleVector,Array}, id, h)
     val = true
     for i in 1:length(x)
         tf, h = can_copy_and_hash(x[i],id,h)
-        h = hash(i,h)
         val &= tf
     end
     return val, h
