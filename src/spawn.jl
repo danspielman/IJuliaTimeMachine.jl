@@ -122,7 +122,7 @@ macro thread(ex::Expr)
 
     q = quote
         if $(saveit)
-            this_state = IJuliaTimeMachine.vars_to_state()   
+            this_state = IJuliaTimeMachine.main_to_dict()   
         end
 
         task = Threads.@spawn begin
@@ -136,7 +136,7 @@ macro thread(ex::Expr)
 
                 if $(saveit)
                     $(ex_save) 
-                    push!(IJuliaTimeMachine.past_queue, IJuliaTimeMachine.Queue_Pair($(n), IJuliaTimeMachine.IJulia_State(this_state, $(out))))
+                    push!(IJuliaTimeMachine.past_queue, IJuliaTimeMachine.Queue_Pair($(n), (this_state, $(out))))
                 end                
 
                 push!(IJuliaTimeMachine.finished, $n)
@@ -178,7 +178,8 @@ function tm_cleanup()
 
         while !(isempty(past_queue))
             q = pop!(past_queue)
-            past[q.n] = q.out
+            put_state!(IJuliaTimeMachine.VX, q.n, q.out[1], q.out[2])
+            #past[q.n] = q.out
             debug_mode && println(IJulia.orig_stdout[], "placed past from cell $(q.n)") 
         end
 

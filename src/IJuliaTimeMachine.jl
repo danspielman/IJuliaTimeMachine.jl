@@ -2,6 +2,55 @@ module IJuliaTimeMachine
 
     import IJulia
 
+    include("varchive.jl")
+    include("can_copy.jl")
+    include("the_past.jl")
+    include("spawn.jl")
+
+    export @past, vars
+
+    #================================
+
+    __init__
+
+    =#
+
+    function __init__()
+        dontsave(VX)
+        dontsave(VX.past)
+        dontsave(VX.store)
+        dontsave(IJulia.Out)
+
+        IJulia.push_preexecute_hook(tm_cleanup)
+        saving!()
+
+        notify_terminal!()
+
+        nothing
+    end
+
+    """
+        unhook()
+
+    Remove the pre and postexecute hooks created by Time Machine.
+    Made for when the Time Machine is causing strange errors.
+    These typically cause strange errors to happen whenever a cell is executed.
+    """
+    function unhook()
+        try
+            IJulia.pop_preexecute_hook(tm_cleanup)    
+        catch _
+            nothing
+        end
+
+        try
+            IJulia.pop_postexecute_hook(save_state)    
+        catch _
+            nothing
+        end
+
+    end
+
     #===========================================
 
     Variables that change behavior of the time machine
@@ -78,12 +127,23 @@ module IJuliaTimeMachine
     `vars` is a dictionary of the variables at the time.
     `ans` is the value of `ans`, which is stored separately.
     """
+    #=
     struct IJulia_State
         vars::Dict
         ans::Any
     end
 
     const past = Dict{Int,IJulia_State}()
+=#
+
+    const VX = Varchive()
+
+    # DontSave is a set of variables not to save
+    const DontSave = Set()
+    function dontsave(x)
+        push!(DontSave, objectid(x))
+        nothing
+    end
 
     struct Queue_Pair
         n::Int
@@ -100,21 +160,5 @@ module IJuliaTimeMachine
     # The part that is executed during a thread has a lock.
     tm_lock = Threads.SpinLock()
 
-    #================================
-
-    includes and __init__
-
-    =#
-
-    include("the_past.jl")
-    include("spawn.jl")
-
-    function __init__()
-        IJulia.push_preexecute_hook(tm_cleanup)
-        saving!()
-        notify_terminal!()
-
-        nothing
-    end
 
 end

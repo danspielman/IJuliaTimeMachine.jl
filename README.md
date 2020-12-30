@@ -65,7 +65,26 @@ To go back to the state as it was after cell 20, at any time, type `TM.@past 20`
 
 If you just want to look at a dictionary of the variables from cell 20, type `TM.vars(20)`.
 
-To stop saving state, type `TM.saving!(false)`.  To start up again, type `TM.saving!(true)`.
+To stop saving state, type `TM.saving!(false)`. 
+This is especially useful if IJuliaTimeMachine is causing errors. To start up again, type `TM.saving!(true)`.
+
+All of the saved data is kept in a structure that we internally call a `Varchive`. It is stored at `TM.VX`. If you want to save all variables so that you can recover them when restarting Jupyter, save this variable. For example, using 
+~~~julia
+bson("vars from this notebook.bson", VX = TM.VX)
+~~~
+
+You can then load and access dictionaries of those variables using `TM.vars(VX, n)`. Say, to get the variables from cell 10, you could type
+~~~julia
+VXold = BSON.load("vars from this notebook.bson")[:VX]
+TM.vars(VXold, 10)
+~~~
+
+If picking variables out of that dictionary is too slow for you, you can emulate the `@past` macro and put all the variables from the dictionary into Main by typing
+~~~
+TM.@dict_to_main(TM.vars(VXold,10))
+~~~
+Of course, you can use any dictionary in place of `TM.vars(VXold,10)`.
+
 
 If you need to free up memory, type `TM.clear_past()` to clear all the saved state information.
 `TM.clear_past(cells)` clears the states in the iterator (or range) given by `cells`.
@@ -98,6 +117,14 @@ To find the directory this package is in, try
 Base.find_package("IJuliaTimeMachine")
 ~~~
 
+# In case of errors
+
+When IJuliaTimeMachine develops problems, it can cause strange errors to appear in every cell. In this case, you will probably want to disable the Time Machine. The following command does this
+
+~~~julia
+TM.unhook()
+~~~
+
 # Bugs
 
 * Output from @thread that is supposed to go to stdout winds up in whatever cell is current.
@@ -105,20 +132,26 @@ It would be terrific to capture this instead, and ideally make it something we c
 
 * Sometimes we get an error that says `error in running finalizer: ErrorException("concurrency violation detected")`.  Not sure why.
 
-* There must be more!  Please try it and find them.
+* There must be more!  Please try to find them.
 
 # Details
 
-* The state saving features work by using an IJulia `postexecute_hook`.
-
 * Time Machine only saves variables that are in `Main`.  
-It stores them in `TM.past`.
+It stores them in `TM.VX`.
+The data structure is described in `varchive.jl`.
 
-* The Time Machine only saves variables that can be copied with deepcopy.  In particular, it does not save functions.  It would be nice to add a way to copy functions.
+* The Time Machine only saves variables that can be copied with deepcopy.  In particular, it does not save functions.  It would be nice to add a way to copy functions. 
 
-* The use of Julia macros in this code is a little crude.  It should probably be cleaned up.
+* It keeps track of these variables by their hashes. So, if two variables store data that has the same hash, one of them will be lost. This is unlikely to be a problem for most notebooks, because a heuristic probabilistic, analysis of hashing suggests that the chance of a collision when there are `v` variables is around `v^2 / 2^64.`
 
-* We try to only copy things that deepcopy can copy. I am not positive this works correctly.
+* The state saving features work by using an IJulia `postexecute_hook`.
+This would not work for processes launched with `@thread` because their postexecute hooks fire before the job finishes.
+So, those jobs finish by putting the data they should save into a queue.
+That data is then saved into VX during the preexecute phase of the next cell execution, using a preexecute hook. The queue is managed with a SpinLock so that two threads can not write to it at the same time.
+
+
+
+
 
 # To do
 
@@ -126,19 +159,14 @@ Please take on one of these tasks!
 
 * Fix any other bug listed above.
 
-* The saving of the past is a inefficient right now in that it copies all variables at all times. Implement something that only makes copies of new variables, and just gives pointers to old ones (using a hash).
 
-
-* add an option to declare a variable not for copy, so we don't make many copies of big data items.
-
-* Come up with better names for all the routines in the interface.
-
-* Find a way to copy and save functions (maybe using IRtools)
+* Find a way to copy and save functions 
 
 * Create a GUI to keep track of which spawned processes are running, and which have finished.
 
 * Think of what other features this needs.
 
-* Improve the documentation so we can release it to the public.  Really, we need to set up documenter.
+* Improve the documentation. Really, we need to set up documenter.
 
-* Note: to modify the package, type `] dev IJuliaTimeMachine`.  You might need to check out some information about developing packages.
+* Figure out a way to create tests for this package. The difficulty is that it needs to run inside Jupyter.
+

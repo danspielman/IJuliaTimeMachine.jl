@@ -1,73 +1,53 @@
-# Functions related to capturing the past states of the notebook
+#= 
+
+Functions related to capturing the past states of the notebook
+
+We always deepcopy variables before saving them in the archive.
+So, we use the routine can_copy to determine if deepcopy will work on them.
+It is not perfect.
+
+To capture all current variables in a dictionary, we use `main_to_dict`.
 
 
-"""
-    can_copy(x)
-
-Is supposed to return true if deepcopy works on x.
-The code to test this is based on deepcopy, but it could get some strange case wrong.
-"""
-can_copy(x) = can_copy(x, IdDict())
-can_copy(x::Union{Core.MethodInstance,Module,Method,GlobalRef,UnionAll,Task,Regex,Function}, id) = false
-can_copy(x::Union{Symbol, DataType, Union, String}, id) = true
-
-function can_copy(x, id) 
-    isbitstype(typeof(x)) && return true
-    haskey(id, x) && return true
-    id[x] = true
-    nf = nfields(x)
-    nf == 0 && return true
-    id[x] = true
-    return all([can_copy(getfield(x,i),id) for i in 1:nf])
-end
-
-function can_copy(x::Union{Tuple,Core.SimpleVector,Array}, id) 
-    haskey(id, x) && return true
-    id[x] = true
-    all([can_copy(xi, id) for xi in x])
-end
-
-function can_copy(x::Dict, id) 
-    haskey(id, x) && return true
-    id[x] = true
-    if x === IJulia.Out
-        return false
-    end
-
-    if x === past
-        return false
-    end
-
-    return all([can_copy((k,s), id) for (k,s) in x])
-end
+=#
 
 """
 Go over every symbol in Main.  
-If `deepcopy` works on it, wrap it and `ans` in an IJulia_State.
+If `deepcopy` works on it, put it in the dict `d`.
 Note that it doesn't capture functions, which is unfortunate.
 """
-function vars_to_state()
-    this_state = Dict{Any,Any}()
+function main_to_dict()
+    d = Dict{Any,Any}()
     for n in names(Main)
-        if can_copy(@eval Main $n)
-            this_state[n] = @eval Main deepcopy($(n))
+        if isdefined(Main, n)
+            val = @eval Main $n
+            if !(objectid(val) ∈ DontSave)
+                can, h = can_copy_and_hash(val)
+                if can
+                    d[n] = (h,val)
+                end
+            end
         end
     end
 
-    return this_state
+    return d
 end
 
 """
-Save the current variables and ans is `past[cell_number]`.
+Save the current variables and ans in VX (a Varchive).
 """
 function save_state()    
+    # if this was spawned by TM.@thread, then its variables will be saved later.
     if !(IJulia.n ∈ spawned)
-        this_state = vars_to_state()
+        di = main_to_dict()
+        
+        # get a version of ans we can copy, if it exists
         ans = IJulia.ans
         ansc = can_copy(ans) ? deepcopy(ans) : nothing   
-        past[IJulia.n] = IJulia_State(this_state, ansc)
 
-        if Base.summarysize(past) > Sys.total_memory()/3
+        put_state!(VX, IJulia.n, di, ansc)
+
+        if Base.summarysize(VX) > Sys.total_memory()/3
             @warn "IJuliaTimeMachine state takes over 1/3 of system memory.  Consider IJuliaTimeMachine.clear_state()."
         end
         debug_mode && println(IJulia.orig_stdout[], "Saved state $(IJulia.n)")
@@ -86,9 +66,9 @@ macro past(n_in)
         n = @eval Main $(n_in)
     end
 
-    if haskey(past, n)
-        local s = past[n].vars
-        local ans = past[n].ans
+    if haskey(VX.past, n)
+        local s = IJuliaTimeMachine.vars(n)
+        local ans = VX.past[n].ans
         return quote
             ($([esc(x) for x in keys(s)]...),) = 
                 ($([esc(x) for x in values(s)]...),) 
@@ -101,34 +81,58 @@ macro past(n_in)
     end
 end
 
+"""
+    @dict_to_main dict
+
+Place all variables in dict into Main memory.
+"""
+macro dict_to_main(dict)
+    s = @eval Main $(dict)
+    return quote
+        ($([esc(x) for x in keys(s)]...),) = 
+            ($([esc(x) for x in values(s)]...),) 
+        nothing
+    end
+end
+
+
 
 """
 Empty all storage of the past.  Use to free up memory.
 """
 function clear_past()
-    empty!(past)
+    empty!(VX.store)
+    empty!(VX.past)
+    return nothing
 end
 
 """
 Empty storage from the cells that are in `indices`.
 """
 function clear_past(indices)
-    for k in indices
-        if haskey(past, k)
-            delete!(past, k)
+    # first, mark all variables that are not in indices
+    keepvar = Set()
+    for (n, vs) in VX.past
+        if !(n ∈ indices)
+            for h in values(vs.vars)
+                push!(keepvar,h)
+            end
         end
+    end
+
+    # now, remove from store every unmarked variable
+    for k in keys(VX.store)
+        if !(k ∈ keepvar)
+            delete!(VX.store, k)
+        end
+    end
+
+    for k ∈ indices
+        delete!(VX.past, k)
     end
 end
 
 """
 Returns the variables saved in a given cell as a dictionary.
 """
-vars(n::Int) = vars(past, n)
-
-function vars(di::Dict, n::Int)
-    if haskey(di,n)
-        return di[n].vars
-    else
-        println("Cell $n was not saved.")
-    end
-end
+vars(n::Int) = vars(VX, n)
