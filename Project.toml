@@ -7,4 +7,5 @@ version = "0.1.0"
 IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
 
 [compat]
+IJulia = "1.23"
 julia = "1"
