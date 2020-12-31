@@ -76,18 +76,21 @@ end
 
 
 """
-    vars(vx::Varchive, key)
+    vars(cell)
+    vars(vx::Varchive, cell)
 
-Returns the variables indexed by key in a dictionary.
+Returns a dictionary of the variables from cell `cell`.
+If `vx` is omitted, returns from the default history.
+This is how it is usually used.
 """
-function vars(vx::Varchive, key)
-    if !haskey(vx.past, key)
-        error("Cell $(key) was not saved.")
+function vars(vx::Varchive, cell)
+    if !haskey(vx.past, cell)
+        error("Cell $(cell) was not saved.")
     end
 
     di = Dict()
 
-    vs = vx.past[key]
+    vs = vx.past[cell]
 
     for (name, h) in vs.vars
         di[name] = vx.store[h]

@@ -140,6 +140,12 @@ module IJuliaTimeMachine
 
     # DontSave is a set of variables not to save
     const DontSave = Set()
+
+    """
+        dontsave(x)
+
+    Do not save variable `x` in the history.
+    """
     function dontsave(x)
         push!(DontSave, objectid(x))
         nothing

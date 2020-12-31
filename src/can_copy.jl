@@ -19,6 +19,13 @@ Is supposed to return true if deepcopy works on x.
 The code to test this is based on deepcopy, but it could get some strange case wrong.
 """
 can_copy(x) = can_copy_and_hash(x)[1]
+
+"""
+    tm_hash(x)
+
+Produces a hash of any variable for which `can_copy` returns true.
+If variables `x` and `y` are different, they will probably have different hashes.
+"""
 tm_hash(x) = can_copy_and_hash(x)[2]
 
 can_copy_and_hash(x) = can_copy_and_hash(x, IdDict(), zero(UInt64))

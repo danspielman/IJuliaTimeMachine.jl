@@ -19,6 +19,7 @@ Note that it doesn't capture functions, which is unfortunate.
 function main_to_dict()
     d = Dict{Any,Any}()
     for n in names(Main)
+        # you would expect that every name in Main corresponds to a defined variable, but this assumption can fail.
         if isdefined(Main, n)
             val = @eval Main $n
             if !(objectid(val) ∈ DontSave)
@@ -116,7 +117,10 @@ end
 
 
 """
+    clear_past(indices)
+
 Empty all storage of the past.  Use to free up memory.
+If indices is omitted, it clears all history.
 """
 function clear_past()
     empty!(VX.store)
@@ -124,9 +128,6 @@ function clear_past()
     return nothing
 end
 
-"""
-Empty storage from the cells that are in `indices`.
-"""
 function clear_past(indices)
     # first, mark all variables that are not in indices
     keepvar = Set()
@@ -150,9 +151,6 @@ function clear_past(indices)
     end
 end
 
-"""
-Returns the variables saved in a given cell as a dictionary.
-"""
 vars(n::Int) = haskey(VX.past,n) ? vars(VX, n) : error("Cell $(n) was not saved.")
 
 """

@@ -4,8 +4,7 @@ CurrentModule = IJuliaTimeMachine
 
 # IJuliaTimeMachine
 
-```@index
-```
+An overview of IJuliaTimeMachine may be found here.
 
 ```@autodocs
 Modules = [IJuliaTimeMachine]
