@@ -2,13 +2,13 @@
 
 contains can_copy and tm_hash
 
-We need to be able to tm_hash every variable for which can_copy
-    returns true.
-tm_hash will basically copy code used for hashing inside Julia,
-except that it accounts for all values inside an array, while Julia's
-default hash does not. Also, Julia's hash does not change when the values of a mutable struct do.
-
-
+We need to be able to tm_hash every variable for which can_copy returns true.
+The code for can_copy is naturally based on Julia's Base.deepcopy.
+We use the same code to compute hashes because
+1. We only need to hash variables we can copy.
+2. We want to be able to hash circular data structures. Base.hash can fail on those.
+3. We want a hash with the property that hash(x) != hash(y) means that it is unlikely that x == y.
+Base.hash does not have this property.
 
 =#
 
@@ -22,7 +22,7 @@ can_copy(x) = can_copy_and_hash(x)[1]
 tm_hash(x) = can_copy_and_hash(x)[2]
 
 can_copy_and_hash(x) = can_copy_and_hash(x, IdDict(), zero(UInt64))
-can_copy_and_hash(x::Union{Core.MethodInstance,Module,Method,GlobalRef,UnionAll,Task,Regex,Function}, id, h) = (false, 0)
+can_copy_and_hash(x::Union{Core.MethodInstance,Module,Method,GlobalRef,UnionAll,Task,Regex,Function,IO}, id, h) = (false, 0)
 can_copy_and_hash(x::Union{Symbol, DataType, Union, String}, id, h) = (true, hash(x,h))
 
 function can_copy_and_hash(x, id, h) 

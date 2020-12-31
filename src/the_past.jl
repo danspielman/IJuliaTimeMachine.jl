@@ -33,6 +33,24 @@ function main_to_dict()
     return d
 end
 
+function main_to_dict_copy()
+    d = Dict{Any,Any}()
+    for n in names(Main)
+        if isdefined(Main, n)
+            val = @eval Main $n
+            if !(objectid(val) ∈ DontSave)
+                can, h = can_copy_and_hash(val)
+                if can
+                    copyval = haskey(VX.store, h) ? nothing : deepcopy(val)
+                    d[n] = (h,copyval)
+                end
+            end
+        end
+    end
+
+    return d
+end
+
 """
 Save the current variables and ans in VX (a Varchive).
 """
@@ -135,4 +153,9 @@ end
 """
 Returns the variables saved in a given cell as a dictionary.
 """
-vars(n::Int) = vars(VX, n)
+vars(n::Int) = haskey(VX.past,n) ? vars(VX, n) : error("Cell $(n) was not saved.")
+
+"""
+Recall the answer from a cell
+"""
+ans(n::Int) = haskey(VX.past,n) ? VX.past[n].ans : error("Cell $(n) was not saved.")

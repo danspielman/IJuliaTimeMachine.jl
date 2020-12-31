@@ -6,17 +6,7 @@ The main difficulty with doing this is that we need to be sure that
 the variables that are being set in the cell are not also being changed elsewhere.
 
 So, we begin by trying to discover the names of all the variables in the cell,
-and then renaming them to unique names (using gensym).
-We then run with those unique names.
-
-When we are finished, we need to
-* capture and return ans, (maybe not return it)
-* 
-* clean up those names, 
-
-to do:
-clean up names after,
-make threaded (is that an issue)?
+and then giving the code access to copies of those variables inside a let block.
 
 =#
 
@@ -56,7 +46,7 @@ function let_block(varlist)
 end
 
 """
-Creates a block that when executed saves the tmp vars in `past`.
+Creates a block that when executed saves the used variables in `VX`.
 """
 function save_state_block(varlist)
     exs = []
@@ -66,9 +56,16 @@ function save_state_block(varlist)
 
         kk = """$(k)"""
 
-
-        q = quote  if @isdefined($k) && IJuliaTimeMachine.can_copy($(k))
-            this_state[Symbol($(kk))] =  deepcopy($(k)) 
+        q = quote if @isdefined($k) 
+            val = $(k)
+ 
+            if !(objectid(val) ∈ IJuliaTimeMachine.DontSave)
+                can, h = IJuliaTimeMachine.can_copy_and_hash(val)
+                if can
+                    copyval = haskey(IJuliaTimeMachine.VX.store, h) ? nothing : deepcopy(val)
+                    this_state[Symbol($(kk))] = (h, copyval)
+                end
+            end
         end
         end
         push!(exs, q)
@@ -122,7 +119,7 @@ macro thread(ex::Expr)
 
     q = quote
         if $(saveit)
-            this_state = IJuliaTimeMachine.main_to_dict()   
+            this_state = IJuliaTimeMachine.main_to_dict_copy()   
         end
 
         task = Threads.@spawn begin
@@ -178,7 +175,7 @@ function tm_cleanup()
 
         while !(isempty(past_queue))
             q = pop!(past_queue)
-            put_state!(IJuliaTimeMachine.VX, q.n, q.out[1], q.out[2])
+            put_state_copied!(IJuliaTimeMachine.VX, q.n, q.out[1], q.out[2])
             #past[q.n] = q.out
             debug_mode && println(IJulia.orig_stdout[], "placed past from cell $(q.n)") 
         end
