@@ -1,4 +1,5 @@
 # IJuliaTimeMachine
+[![](https://img.shields.io/badge/docs-latest-blue.svg)](https://danspielman.github.io/IJuliaTimeMachine.jl/dev/)
 
 This package provides two capabilities that can be  useful when running long computational experiments in IJulia notebooks:
 * It allows you to return all variables to a previous state (the past).
@@ -8,6 +9,8 @@ This is useful if you run experiments in Julia cells that can take minutes or lo
 The process sandboxes the variables it uses, so it does not impact other cells.
 This is especially useful if you plan to run many similar experiments.  
 Now, you can just copy, paste and modify cells before running them.
+
+[More documentation can be found here.](https://danspielman.github.io/IJuliaTimeMachine.jl/dev/)
 
 # Installation
 
@@ -173,7 +176,9 @@ So, those jobs finish by putting the data they should save into a queue.
 That data is then saved into VX during the preexecute phase of the next cell execution, using a preexecute hook. The queue is managed with a SpinLock so that two threads can not write to it at the same time.
 
 
+# Acknowledgements
 
+The development of this package has been supported in part by a Simons Investigator Award to Daniel A. Spielman.
 
 
 
