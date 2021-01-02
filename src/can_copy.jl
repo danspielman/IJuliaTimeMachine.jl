@@ -29,7 +29,7 @@ If variables `x` and `y` are different, they will probably have different hashes
 tm_hash(x) = can_copy_and_hash(x)[2]
 
 can_copy_and_hash(x) = can_copy_and_hash(x, IdDict(), zero(UInt64))
-can_copy_and_hash(x::Union{Core.MethodInstance,Module,Method,GlobalRef,UnionAll,Task,Regex,Function,IO}, id, h) = (false, 0)
+can_copy_and_hash(x::Union{Core.MethodInstance,Module,Method,GlobalRef,UnionAll,Task,Regex,Function,IO}, id, h) = (false, zero(UInt64))
 can_copy_and_hash(x::Union{Symbol, DataType, Union, String}, id, h) = (true, hash(x,h))
 
 function can_copy_and_hash(x, id, h) 
@@ -43,7 +43,10 @@ function can_copy_and_hash(x, id, h)
     h = hash(typeof(x), h)
     for i in 1:nf
         tf, h = can_copy_and_hash(getfield(x,i),id,h)
-        val &= tf
+        if tf == false
+            val = false
+            break
+        end
     end
     return val, h
 end
@@ -59,7 +62,10 @@ function can_copy_and_hash(x::Union{Tuple,Core.SimpleVector,Array}, id, h)
     val = true
     for i in 1:length(x)
         tf, h = can_copy_and_hash(x[i],id,h)
-        val &= tf
+        if tf == false
+            val = false
+            break
+        end
     end
     return val, h
 end
@@ -73,7 +79,10 @@ function can_copy_and_hash(x::Dict, id, h)
     val = true
     for (k,v) in x
         tf, h = can_copy_and_hash((k,v),id,h)
-        val &= tf
+        if tf == false
+            val = false
+            break
+        end
     end
     return val, h
 
