@@ -128,7 +128,7 @@ macro thread(ex::Expr)
 
             Threads.lock(IJuliaTimeMachine.tm_lock) do 
                 
-                $(out) = IJuliaTimeMachine.can_copy($(val)) ? deepcopy($(val)) : nothing
+                $(out) = IJuliaTimeMachine.can_copy($(val)) ? deepcopy(isa($(val), Symbol) ? Meta.quot($(val)) : $(val)) : nothing
                 push!(IJuliaTimeMachine.out_queue, IJuliaTimeMachine.Queue_Pair($(n), $(out)))
 
                 if $(saveit)
