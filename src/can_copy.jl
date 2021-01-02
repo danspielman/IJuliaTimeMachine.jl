@@ -29,8 +29,8 @@ If variables `x` and `y` are different, they will probably have different hashes
 tm_hash(x) = can_copy_and_hash(x)[2]
 
 can_copy_and_hash(x) = can_copy_and_hash(x, IdDict(), zero(UInt64))
-can_copy_and_hash(x::Union{Core.MethodInstance,Module,Method,GlobalRef,UnionAll,Task,Regex,Function,IO}, id, h) = (false, zero(UInt64))
-can_copy_and_hash(x::Union{Symbol, DataType, Union, String}, id, h) = (true, hash(x,h))
+can_copy_and_hash(x::Union{Core.MethodInstance,Module,DataType,Method,GlobalRef,UnionAll,Task,Regex,Function,IO}, id, h) = (false, zero(UInt64))
+can_copy_and_hash(x::Union{Symbol, Union, String}, id, h) = (true, hash(x,h))
 
 function can_copy_and_hash(x, id, h) 
     isbitstype(typeof(x)) && return (true, hash(x,h))

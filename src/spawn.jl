@@ -26,6 +26,7 @@ function extract_symbols(ex::Expr)
     end
 end
 extract_symbols(ex::Symbol) = Set{Symbol}([ex])
+
 extract_symbols(ex) = Set{Symbol}()
 
 
@@ -59,10 +60,10 @@ function save_state_block(varlist)
         q = quote if @isdefined($k) 
             val = $(k)
  
-            if !(objectid(val) ∈ IJuliaTimeMachine.DontSave)
+            if !(objectid(val) ∈ IJuliaTimeMachine.DontSave) 
                 can, h = IJuliaTimeMachine.can_copy_and_hash(val)
                 if can
-                    copyval = haskey(IJuliaTimeMachine.VX.store, h) ? nothing : deepcopy(val)
+                    copyval = haskey(IJuliaTimeMachine.VX.store, h) ? nothing : deepcopy(isa(val, Union{Expr,Symbol}) ? Meta.quot(val) : val)
                     this_state[Symbol($(kk))] = (h, copyval)
                 end
             end
@@ -119,7 +120,7 @@ macro thread(ex::Expr)
 
     q = quote
         if $(saveit)
-            this_state = IJuliaTimeMachine.main_to_dict_copy()   
+            this_state = IJuliaTimeMachine.main_to_dict()   
         end
 
         task = Threads.@spawn begin
@@ -128,7 +129,7 @@ macro thread(ex::Expr)
 
             Threads.lock(IJuliaTimeMachine.tm_lock) do 
                 
-                $(out) = IJuliaTimeMachine.can_copy($(val)) ? deepcopy(isa($(val), Symbol) ? Meta.quot($(val)) : $(val)) : nothing
+                $(out) = IJuliaTimeMachine.can_copy($(val)) ? deepcopy(isa($(val), Union{Expr,Symbol}) ? Meta.quot($(val)) : $(val)) : nothing
                 push!(IJuliaTimeMachine.out_queue, IJuliaTimeMachine.Queue_Pair($(n), $(out)))
 
                 if $(saveit)
@@ -175,7 +176,7 @@ function tm_cleanup()
 
         while !(isempty(past_queue))
             q = pop!(past_queue)
-            put_state_copied!(IJuliaTimeMachine.VX, q.n, q.out[1], q.out[2])
+            put_state!(IJuliaTimeMachine.VX, q.n, q.out[1], q.out[2])
             #past[q.n] = q.out
             debug_mode && println(IJulia.orig_stdout[], "placed past from cell $(q.n)") 
         end

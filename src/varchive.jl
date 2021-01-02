@@ -45,11 +45,12 @@ function put_state!(vx::Varchive, key, di::Dict, ansc)
         h, val = pair
         vs.vars[name] = h
         if !haskey(vx.store, h)
-            vx.store[h] = deepcopy(val)
+            vx.store[h] = val
         end
     end
 end
 
+#=
 """
     put_state_copied!(vx::Varchive, key, di::Dict, ansc)
     
@@ -73,7 +74,7 @@ function put_state_copied!(vx::Varchive, key, di::Dict, ansc)
         end
     end
 end
-
+=#
 
 """
     vars(cell)

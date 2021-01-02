@@ -25,24 +25,7 @@ function main_to_dict()
             if !(objectid(val) ∈ DontSave)
                 can, h = can_copy_and_hash(val)
                 if can
-                    d[n] = isa(val, Symbol) ? (h,Meta.quot(val)) : (h,val)
-                end
-            end
-        end
-    end
-
-    return d
-end
-
-function main_to_dict_copy()
-    d = Dict{Any,Any}()
-    for n in names(Main)
-        if isdefined(Main, n)
-            val = @eval Main $n
-            if !(objectid(val) ∈ DontSave)
-                can, h = can_copy_and_hash(val)
-                if can
-                    copyval = haskey(VX.store, h) ? nothing : deepcopy(isa(val, Symbol) ? Meta.quot(val) : val)
+                    copyval = haskey(VX.store, h) ? nothing : deepcopy(isa(val, Union{Expr,Symbol}) ? Meta.quot(val) : val)
                     d[n] = (h,copyval)
                 end
             end
@@ -51,6 +34,7 @@ function main_to_dict_copy()
 
     return d
 end
+
 
 """
 Save the current variables and ans in VX (a Varchive).
@@ -62,7 +46,7 @@ function save_state()
         
         # get a version of ans we can copy, if it exists
         ans = IJulia.ans
-        ansc = can_copy(ans) ? deepcopy(isa(ans,Symbol) ? Meta.quot(ans) : ans) : nothing   
+        ansc = can_copy(ans) ? deepcopy(isa(ans,Union{Expr,Symbol}) ? Meta.quot(ans) : ans) : nothing   
 
         put_state!(VX, IJulia.n, di, ansc)
 

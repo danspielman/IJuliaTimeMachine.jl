@@ -41,10 +41,11 @@ This will export the function `vars` and the macro `@past`.
 To check how many threads you have available, type
 
 ~~~julia
-> Threads.nthreads()
+Threads.nthreads()
 ~~~
 
-If you only have one, but should have more, then you have to do some configuration.
+If you only have one then the `@thread` macro will not work.
+Most modern computers allow for more than one thread after some configuration.
 
 To make sure that your Jupyter notebook starts with threads, 
 and you are running Jupyter from a cell, you could type
@@ -55,7 +56,7 @@ jupyter notebook
 ~~~
 
 Or, on a Mac, put the following line in the file
-`~/.profile`:
+`~/.profile` or `~/.zshrc`:
 ~~~shell
 export JULIA_NUM_THREADS=2
 ~~~
@@ -141,6 +142,9 @@ TM.unhook()
 
 Please help improve this. Someone who understands Julia Macros and internals could do a much better job of this. Feel free to file issues, create pull requests, or get in touch with `daniel.spielman@yale.edu` if you can improve it.
 Here are some things that would be worth doing:
+
+* Find a good way to save DataTypes. This is achievable for `@past`. But, it is trickier to make it work for `@threads`. It would be good to use a consistent solution.
+
 
 * Find a way to copy and save functions 
 
