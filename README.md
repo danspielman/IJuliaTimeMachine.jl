@@ -16,7 +16,7 @@ Now, you can just copy, paste and modify cells before running them.
 
 
 ~~~julia
-using Pkg; Pkg.add(url="https://github.com/danspielman/IJuliaTimeMachine.jl")
+using Pkg; Pkg.add("IJuliaTimeMachine")
 ~~~
 
 Once you are running a Jupyter notebook, you can start the time machine by typing
