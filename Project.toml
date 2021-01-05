@@ -1,7 +1,7 @@
 name = "IJuliaTimeMachine"
 uuid = "c6113210-d3d9-4301-930e-a2f8bca719bb"
 authors = ["Daniel Spielman <daniel.spielman@yale.edu> and contributors"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
